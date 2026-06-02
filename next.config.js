@@ -1,0 +1,16 @@
+{
+  "name": "estem-crm",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "14.2.3",
+    "@supabase/supabase-js": "2.43.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
