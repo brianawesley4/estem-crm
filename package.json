@@ -1,5 +1,5 @@
-{
-  "name": "estem-crm",
-  "version": "1.0.0",
-  "engines": { "node": "18.x" }
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
 }
+module.exports = nextConfig
