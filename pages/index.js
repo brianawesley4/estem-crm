@@ -537,14 +537,14 @@ function ISATab({leads,openLead}) {
             <div style={{fontSize:13,fontFamily:'Georgia,serif',marginBottom:10}}>Outreach Scripts</div>
             <div style={{fontSize:11,lineHeight:1.8}}>
               {[
-                {label:'📱 Text — Warm',script:`Hey [Name]! It's Bri from Estēm Realty — it's been a while! Are your real estate plans still on the radar? No pressure 😊`},
-                {label:'📱 Text — Direct',script:`Hi [Name], Bri Wesley with Estēm Realty. Just checking in — still thinking about buying/selling? Happy to chat.`},
-                {label:'📱 Text — Soft Follow-up',script:`Hey [Name], Bri here — just wanted to follow up on my last message. No pressure at all, just want to make sure you have what you need.`},
-                {label:'📞 Call — Warm Opening',script:`Hi [Name], this is Bri Wesley with Estēm Realty. Did I catch you at a good time? I know it's been a while — has anything changed with your real estate plans?`},
-                {label:'📞 Call — Soft',script:`Hi [Name], Bri here from Estēm Realty. I'm not calling to pitch anything — I genuinely just wanted to check in. How are things?`},
-                {label:'🔔 Voicemail',script:`Hi [Name], it's Bri Wesley with Estēm Realty — just thinking about you and wanted to personally reach out. Call or text me when you get a chance. No rush!`},
-              ].map(({label,script})=>(
-                <ISAScriptCard key={label} label={label} script={script} />
+                {label:'📱 Text — Warm', body:`Hey [Name]! It's Bri from Estēm Realty — it's been a while! Are your real estate plans still on the radar? No pressure 😊`},
+                {label:'📱 Text — Direct', body:`Hi [Name], Bri Wesley with Estēm Realty. Just checking in — still thinking about buying/selling?`},
+                {label:'📱 Text — Soft Follow-up', body:`Hey [Name], Bri here — just following up. No pressure at all, just want to make sure you have what you need.`},
+                {label:'📞 Call — Warm', body:`Hi [Name], this is Bri Wesley with Estēm Realty. Did I catch you at a good time? Has anything changed with your real estate plans?`},
+                {label:'📞 Call — Soft', body:`Hi [Name], Bri here from Estēm Realty. Not calling to pitch anything — just genuinely wanted to check in. How are things?`},
+                {label:'🔔 Voicemail', body:`Hi [Name], it's Bri Wesley with Estēm Realty — just thinking about you. Call or text me when you get a chance. No rush!`},
+              ].map(({label,body})=>(
+                <ISAScriptCard key={label} label={label} body={body} />
               ))}
             </div>
           </div>
@@ -665,7 +665,7 @@ function LeadModal({lead,notes,user,noteText,setNoteText,noteType,setNoteType,ad
             </div>
             <Section>Call & Text</Section>
             <QuoButtons phone={lead.phone} />
-            <Section style={{marginTop:12}}>Script Library</Section>
+            <Section style={{marginTop:10}}>Script Library</Section>
             <ScriptLibrary lead={lead} setNoteText={setNoteText} />
           </div>
 
@@ -778,19 +778,15 @@ function FField({label,children}) { return <div><div style={{fontSize:9,letterSp
 const inp = {fontFamily:'Georgia,serif',fontSize:11,width:'100%',padding:'7px 8px',border:'1px solid var(--border2)',background:'var(--cream)',color:'var(--black)',outline:'none'}
 
 // ── ISA SCRIPT CARD ───────────────────────────────────────────────────────────
-function ISAScriptCard({label, script}) {
+function ISAScriptCard({label, body}) {
   const [copied, setCopied] = useState(false)
-  const copy = () => {
-    navigator.clipboard.writeText(script)
-    setCopied(true)
-    setTimeout(()=>setCopied(false), 2000)
-  }
   return (
     <div style={{background:'var(--cream2)',border:'1px solid var(--border)',padding:'8px 10px',marginBottom:7}}>
       <div style={{fontSize:9,fontWeight:'bold',color:'var(--gold2)',letterSpacing:0.5,marginBottom:4}}>{label}</div>
-      <div style={{fontSize:11,lineHeight:1.6,color:'var(--black2)',marginBottom:6}}>{script}</div>
-      <button onClick={copy} style={{fontSize:9,padding:'2px 8px',background:copied?'var(--green)':'var(--black)',color:'white',border:'none',fontFamily:'Georgia,serif',cursor:'pointer'}}>
-        {copied ? '✓ Copied' : 'Copy'}
+      <div style={{fontSize:11,lineHeight:1.6,color:'var(--black2)',marginBottom:6}}>{body}</div>
+      <button onClick={()=>{navigator.clipboard.writeText(body);setCopied(true);setTimeout(()=>setCopied(false),2000)}}
+        style={{fontSize:9,padding:'2px 8px',background:copied?'var(--green)':'var(--black)',color:'white',border:'none',fontFamily:'Georgia,serif',cursor:'pointer'}}>
+        {copied?'✓ Copied':'Copy'}
       </button>
     </div>
   )
@@ -798,102 +794,74 @@ function ISAScriptCard({label, script}) {
 
 // ── QUO CALL/TEXT BUTTONS ─────────────────────────────────────────────────────
 function QuoButtons({phone}) {
-  const QUO_NUMBER = '+16826289804'
-  const clean = (phone||'').replace(/\D/g,'')
-  const e164 = clean ? (clean.startsWith('1') ? '+'+clean : '+1'+clean) : null
   const [copied, setCopied] = useState(false)
-
-  const copyPhone = () => {
-    navigator.clipboard.writeText(phone||'')
-    setCopied(true)
-    setTimeout(()=>setCopied(false), 2000)
-  }
-
+  const clean = (phone||'').replace(/\D/g,'')
+  const e164 = clean ? (clean.length===10?'+1'+clean:'+'+clean) : null
   if (!phone) return <div style={{fontSize:10,color:'var(--gray)',fontStyle:'italic',marginBottom:8}}>No phone number on file.</div>
-
   return (
-    <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+    <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8,alignItems:'center'}}>
       <a href={`tel:${e164||phone}`} style={{textDecoration:'none'}}>
-        <button style={{background:'var(--green)',color:'white',border:'none',padding:'5px 11px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>📞 Call</button>
+        <button style={{background:'var(--green)',color:'white',border:'none',padding:'5px 12px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>📞 Call</button>
       </a>
       <a href={`sms:${e164||phone}`} style={{textDecoration:'none'}}>
-        <button style={{background:'var(--blue)',color:'white',border:'none',padding:'5px 11px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>💬 Text</button>
+        <button style={{background:'var(--blue)',color:'white',border:'none',padding:'5px 12px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>💬 Text</button>
       </a>
-      <button onClick={copyPhone} style={{background:copied?'var(--green)':'white',color:copied?'white':'var(--black)',border:'1px solid var(--border2)',padding:'5px 11px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>
-        {copied ? '✓ Copied' : '📋 Copy Number'}
+      <button onClick={()=>{navigator.clipboard.writeText(phone);setCopied(true);setTimeout(()=>setCopied(false),2000)}}
+        style={{background:copied?'var(--green)':'white',color:copied?'white':'var(--black)',border:'1px solid var(--border2)',padding:'5px 12px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>
+        {copied?'✓ Copied':'📋 Copy Number'}
       </button>
-      <span style={{fontSize:10,color:'var(--gray)',alignSelf:'center'}}>{phone}</span>
+      <span style={{fontSize:10,color:'var(--gray)'}}>{phone}</span>
     </div>
   )
 }
 
-// ── SCRIPT LIBRARY (editable, multi-variant) ──────────────────────────────────
+// ── SCRIPT LIBRARY ────────────────────────────────────────────────────────────
 function ScriptLibrary({lead, setNoteText}) {
-  const firstName = (lead.name||'').split(' ')[0] || 'there'
-  const stage = lead.stage || ''
-  const isRE = stage.startsWith('Re-Engagement')
-  const isHot = stage === 'Hot'
-  const isSeller = (lead.type||'').toLowerCase().includes('seller')
-  const isBuyer = (lead.type||'').toLowerCase().includes('buyer')
-  const isPast = stage === 'Past Client'
-
+  const first = (lead.name||'').split(' ')[0]||'there'
+  const stage = lead.stage||''
+  const type = (lead.type||'').toLowerCase()
   const [active, setActive] = useState(null)
   const [editText, setEditText] = useState('')
   const [copied, setCopied] = useState(false)
 
   const scripts = [
-    ...(isRE||true ? [
-      {cat:'Re-Engagement',label:'Warm Text',body:`Hey ${firstName}! It's Bri from Estēm Realty — it's been a while! Are your real estate plans still on the radar? No pressure 😊`},
-      {cat:'Re-Engagement',label:'Direct Text',body:`Hi ${firstName}, Bri Wesley with Estēm Realty. Just checking in — still thinking about buying/selling?`},
-      {cat:'Re-Engagement',label:'Soft Follow-up',body:`Hey ${firstName}, Bri here — just following up on my last message. No pressure at all, just want to make sure you have everything you need.`},
-      {cat:'Re-Engagement',label:'Luxury/Professional',body:`Hi ${firstName}, this is Bri Wesley with Estēm Realty Group. I wanted to personally reconnect — the market has shifted in ways that could benefit your position. Would love to catch up when you have a moment.`},
-    ] : []),
-    ...(isHot ? [
-      {cat:'Hot Lead',label:'Confirm Appointment',body:`Hi ${firstName}! Bri here — just confirming our appointment. Looking forward to connecting and finding you the perfect fit. Let me know if anything changes!`},
-      {cat:'Hot Lead',label:'Send Listings',body:`Hi ${firstName}, Bri Wesley here! I pulled some listings that match exactly what we discussed. Want me to send them over?`},
-    ] : []),
-    ...(isSeller ? [
-      {cat:'Seller',label:'Market Update',body:`Hi ${firstName}, Bri here! I wanted to share a quick market update for your area — homes are moving and pricing is strong. Worth a quick chat about your options?`},
-      {cat:'Seller',label:'CMA Offer',body:`Hi ${firstName}, it's Bri Wesley with Estēm Realty. I'd love to put together a complimentary market analysis for your home — no obligation, just information. Interested?`},
-    ] : []),
-    ...(isBuyer ? [
-      {cat:'Buyer',label:'New Listings Alert',body:`Hi ${firstName}! Bri here — some new listings just hit the market that match your criteria. Want me to send them your way?`},
-      {cat:'Buyer',label:'Pre-Approval Check',body:`Hi ${firstName}, Bri Wesley here. Before I send listings, I want to make sure we're set up for success. Have you had a chance to connect with a lender yet?`},
-    ] : []),
-    ...(isPast ? [
-      {cat:'Past Client',label:'Personal Check-in',body:`Hey ${firstName}! It's Bri — just thinking about you and wanted to say hi. How are things going? If you ever need anything real estate related, I'm always here.`},
-      {cat:'Past Client',label:'Referral Ask',body:`Hi ${firstName}! Bri here. So glad I got to work with you — if you know anyone thinking of buying or selling, I'd be honored to help them too. Hope all is well!`},
-    ] : []),
-    {cat:'Voicemail',label:'Standard VM',body:`Hi ${firstName}, it's Bri Wesley with Estēm Realty — just thinking about you and wanted to personally reach out. Call or text me when you get a chance. No rush!`},
-    {cat:'Email',label:'Re-Engagement Email',body:`Subject: Checking In — ${firstName}\n\nHi ${firstName},\n\nBri Wesley here from Estēm Realty Group. I wanted to personally reach out and reconnect.\n\nThe market in your area has had some interesting shifts lately — I'd love to share what I'm seeing and how it might affect your plans.\n\nWould you have 10 minutes this week for a quick call?\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
+    {cat:'Re-Engagement', label:'Warm Text', body:`Hey ${first}! It's Bri from Estēm Realty — it's been a while! Are your real estate plans still on the radar? No pressure 😊`},
+    {cat:'Re-Engagement', label:'Direct Text', body:`Hi ${first}, Bri Wesley with Estēm Realty. Just checking in — still thinking about buying/selling?`},
+    {cat:'Re-Engagement', label:'Soft Follow-up', body:`Hey ${first}, Bri here — just following up on my last message. No pressure at all.`},
+    {cat:'Re-Engagement', label:'Luxury/Professional', body:`Hi ${first}, this is Bri Wesley with Estēm Realty Group. I wanted to personally reconnect — the market has shifted in ways that could benefit your position. Would love to catch up.`},
+    ...(stage==='Hot'?[
+      {cat:'Hot Lead', label:'Confirm Appointment', body:`Hi ${first}! Bri here — just confirming our appointment. Looking forward to connecting!`},
+      {cat:'Hot Lead', label:'Send Listings', body:`Hi ${first}, Bri Wesley here! I pulled some listings that match what we discussed. Want me to send them over?`},
+    ]:[]),
+    ...(type.includes('seller')?[
+      {cat:'Seller', label:'Market Update', body:`Hi ${first}, Bri here! Wanted to share a quick market update — homes in your area are moving fast. Worth a chat about your options?`},
+      {cat:'Seller', label:'Free CMA', body:`Hi ${first}, it's Bri Wesley with Estēm Realty. I'd love to put together a complimentary market analysis for your home — no obligation. Interested?`},
+    ]:[]),
+    ...(type.includes('buyer')?[
+      {cat:'Buyer', label:'New Listings', body:`Hi ${first}! Bri here — some new listings just hit the market that match your criteria. Want me to send them your way?`},
+      {cat:'Buyer', label:'Pre-Approval Check', body:`Hi ${first}, Bri Wesley here. Have you had a chance to connect with a lender yet? Happy to refer someone great.`},
+    ]:[]),
+    ...(stage==='Past Client'?[
+      {cat:'Past Client', label:'Personal Check-in', body:`Hey ${first}! It's Bri — just thinking about you and wanted to say hi. If you ever need anything real estate related, I'm always here.`},
+      {cat:'Past Client', label:'Referral Ask', body:`Hi ${first}! Bri here. If you know anyone thinking of buying or selling, I'd be honored to help them too. Hope all is well!`},
+    ]:[]),
+    {cat:'Voicemail', label:'Standard VM', body:`Hi ${first}, it's Bri Wesley with Estēm Realty — just thinking about you. Call or text me when you get a chance. No rush!`},
+    {cat:'Email', label:'Re-Engagement', body:`Subject: Checking In — ${first}\n\nHi ${first},\n\nBri Wesley here from Estēm Realty Group. I wanted to personally reach out and reconnect.\n\nThe market has had some interesting shifts lately — I'd love to share what I'm seeing and how it might affect your plans.\n\nWould you have 10 minutes this week?\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
   ]
 
   const cats = [...new Set(scripts.map(s=>s.cat))]
 
-  const select = (s) => {
-    setActive(s.label)
-    setEditText(s.body)
-    setCopied(false)
-  }
-
-  const copy = () => {
-    navigator.clipboard.writeText(editText)
-    setCopied(true)
-    setTimeout(()=>setCopied(false), 2000)
-  }
-
-  const useAsNote = () => {
-    if (setNoteText) setNoteText(editText)
-  }
+  const select = s => { setActive(s.label); setEditText(s.body); setCopied(false) }
 
   return (
     <div>
-      {cats.map(cat => (
-        <div key={cat} style={{marginBottom:10}}>
+      {cats.map(cat=>(
+        <div key={cat} style={{marginBottom:9}}>
           <div style={{fontSize:9,letterSpacing:0.8,textTransform:'uppercase',color:'var(--gold2)',marginBottom:4,fontWeight:'bold'}}>{cat}</div>
-          <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:4}}>
+          <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
             {scripts.filter(s=>s.cat===cat).map(s=>(
-              <button key={s.label} onClick={()=>select(s)} style={{fontSize:9,padding:'3px 8px',border:'1px solid var(--border2)',background:active===s.label?'var(--black)':'white',color:active===s.label?'white':'var(--gray)',fontFamily:'Georgia,serif',cursor:'pointer'}}>
+              <button key={s.label} onClick={()=>select(s)}
+                style={{fontSize:9,padding:'3px 8px',border:'1px solid var(--border2)',background:active===s.label?'var(--black)':'white',color:active===s.label?'white':'var(--gray)',fontFamily:'Georgia,serif',cursor:'pointer'}}>
                 {s.label}
               </button>
             ))}
@@ -903,17 +871,15 @@ function ScriptLibrary({lead, setNoteText}) {
       {editText && (
         <div style={{marginTop:8}}>
           <div style={{fontSize:9,letterSpacing:0.8,textTransform:'uppercase',color:'var(--gray)',marginBottom:4}}>Edit before sending</div>
-          <textarea
-            value={editText}
-            onChange={e=>setEditText(e.target.value)}
-            rows={5}
-            style={{width:'100%',fontFamily:'Georgia,serif',fontSize:11,padding:8,border:'1px solid var(--gold)',background:'#FFFEF8',resize:'vertical',outline:'none'}}
-          />
+          <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={5}
+            style={{width:'100%',fontFamily:'Georgia,serif',fontSize:11,padding:8,border:'1px solid var(--gold)',background:'#FFFEF8',resize:'vertical',outline:'none'}} />
           <div style={{display:'flex',gap:5,marginTop:5}}>
-            <button onClick={copy} style={{background:copied?'var(--green)':'var(--black)',color:'white',border:'none',padding:'5px 12px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>
-              {copied ? '✓ Copied!' : '📋 Copy Script'}
+            <button onClick={()=>{navigator.clipboard.writeText(editText);setCopied(true);setTimeout(()=>setCopied(false),2000)}}
+              style={{background:copied?'var(--green)':'var(--black)',color:'white',border:'none',padding:'5px 12px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>
+              {copied?'✓ Copied!':'📋 Copy Script'}
             </button>
-            <button onClick={useAsNote} style={{background:'white',border:'1px solid var(--border2)',color:'var(--black)',padding:'5px 12px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>
+            <button onClick={()=>setNoteText&&setNoteText(editText)}
+              style={{background:'white',border:'1px solid var(--border2)',color:'var(--black)',padding:'5px 12px',fontSize:10,fontFamily:'Georgia,serif',cursor:'pointer'}}>
               📝 Use as Note
             </button>
           </div>
@@ -923,7 +889,7 @@ function ScriptLibrary({lead, setNoteText}) {
   )
 }
 
-
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 function whyPriority(l) {
   const n = (l.notes||'').toLowerCase(), s = l.source||'', stage = l.stage||''
   const reasons = []
