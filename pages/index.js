@@ -825,28 +825,79 @@ function ScriptLibrary({lead, setNoteText}) {
   const [copied, setCopied] = useState(false)
 
   const scripts = [
+    // ── RE-ENGAGEMENT ──────────────────────────────────────────────────────────
     {cat:'Re-Engagement', label:'Warm Text', body:`Hey ${first}! It's Bri from Estēm Realty — it's been a while! Are your real estate plans still on the radar? No pressure 😊`},
     {cat:'Re-Engagement', label:'Direct Text', body:`Hi ${first}, Bri Wesley with Estēm Realty. Just checking in — still thinking about buying/selling?`},
-    {cat:'Re-Engagement', label:'Soft Follow-up', body:`Hey ${first}, Bri here — just following up on my last message. No pressure at all.`},
-    {cat:'Re-Engagement', label:'Luxury/Professional', body:`Hi ${first}, this is Bri Wesley with Estēm Realty Group. I wanted to personally reconnect — the market has shifted in ways that could benefit your position. Would love to catch up.`},
-    ...(stage==='Hot'?[
-      {cat:'Hot Lead', label:'Confirm Appointment', body:`Hi ${first}! Bri here — just confirming our appointment. Looking forward to connecting!`},
-      {cat:'Hot Lead', label:'Send Listings', body:`Hi ${first}, Bri Wesley here! I pulled some listings that match what we discussed. Want me to send them over?`},
-    ]:[]),
-    ...(type.includes('seller')?[
-      {cat:'Seller', label:'Market Update', body:`Hi ${first}, Bri here! Wanted to share a quick market update — homes in your area are moving fast. Worth a chat about your options?`},
-      {cat:'Seller', label:'Free CMA', body:`Hi ${first}, it's Bri Wesley with Estēm Realty. I'd love to put together a complimentary market analysis for your home — no obligation. Interested?`},
-    ]:[]),
-    ...(type.includes('buyer')?[
-      {cat:'Buyer', label:'New Listings', body:`Hi ${first}! Bri here — some new listings just hit the market that match your criteria. Want me to send them your way?`},
-      {cat:'Buyer', label:'Pre-Approval Check', body:`Hi ${first}, Bri Wesley here. Have you had a chance to connect with a lender yet? Happy to refer someone great.`},
-    ]:[]),
-    ...(stage==='Past Client'?[
-      {cat:'Past Client', label:'Personal Check-in', body:`Hey ${first}! It's Bri — just thinking about you and wanted to say hi. If you ever need anything real estate related, I'm always here.`},
-      {cat:'Past Client', label:'Referral Ask', body:`Hi ${first}! Bri here. If you know anyone thinking of buying or selling, I'd be honored to help them too. Hope all is well!`},
-    ]:[]),
-    {cat:'Voicemail', label:'Standard VM', body:`Hi ${first}, it's Bri Wesley with Estēm Realty — just thinking about you. Call or text me when you get a chance. No rush!`},
-    {cat:'Email', label:'Re-Engagement', body:`Subject: Checking In — ${first}\n\nHi ${first},\n\nBri Wesley here from Estēm Realty Group. I wanted to personally reach out and reconnect.\n\nThe market has had some interesting shifts lately — I'd love to share what I'm seeing and how it might affect your plans.\n\nWould you have 10 minutes this week?\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
+    {cat:'Re-Engagement', label:'Soft Follow-up', body:`Hey ${first}, Bri here — just following up on my last message. No pressure at all, just want to make sure you have what you need.`},
+    {cat:'Re-Engagement', label:'Luxury/Professional', body:`Hi ${first}, this is Bri Wesley with Estēm Realty Group. I wanted to personally reconnect — the market has shifted in ways that could benefit your position. Would love to catch up when you have a moment.`},
+    {cat:'Re-Engagement', label:'Long Dormant (2+ yrs)', body:`Hi ${first}, it's Bri Wesley with Estēm Realty. I know it's been a while — I just wanted to reach out personally and see how you're doing. If real estate is ever back on the radar, I'm here. No pressure at all!`},
+
+    // ── BUYER ──────────────────────────────────────────────────────────────────
+    {cat:'Buyer', label:'New Listings Alert', body:`Hi ${first}! Bri here — some new listings just hit the market that match your criteria. Want me to send them your way?`},
+    {cat:'Buyer', label:'Pre-Approval Check', body:`Hi ${first}, Bri Wesley here. Have you had a chance to connect with a lender yet? I have a few great referrals if you need one — happy to help!`},
+    {cat:'Buyer', label:'Market Shift Update', body:`Hi ${first}, Bri here! I wanted to give you a quick heads-up — the market is shifting and there are some real opportunities right now. Would love to catch up and share what I'm seeing.`},
+    {cat:'Buyer', label:'After Showing', body:`Hi ${first}! Bri here — just wanted to follow up after our showing. What did you think? Happy to answer any questions or set up more tours whenever you're ready.`},
+
+    // ── SELLER ─────────────────────────────────────────────────────────────────
+    {cat:'Seller', label:'Market Update', body:`Hi ${first}, Bri here! Wanted to share a quick market update — homes in your area are moving and prices are strong. Worth a chat about your options?`},
+    {cat:'Seller', label:'Free CMA Offer', body:`Hi ${first}, it's Bri Wesley with Estēm Realty. I'd love to put together a complimentary market analysis for your home — no obligation, just good information. Interested?`},
+    {cat:'Seller', label:'Listing Interest', body:`Hi ${first}, Bri Wesley here. I actually have buyers actively looking in your neighborhood right now. Would you ever consider selling? Happy to chat if so!`},
+    {cat:'Seller', label:'Price Reduction Follow-up', body:`Hi ${first}, Bri here. I wanted to circle back and talk strategy. The market has some nuances right now that I think could work in your favor. Do you have 10 minutes this week?`},
+
+    // ── FSBO ───────────────────────────────────────────────────────────────────
+    {cat:'FSBO', label:'First Outreach', body:`Hi ${first}, my name is Bri Wesley with Estēm Realty Group. I saw your home listed for sale — I'm not calling to list it, I actually have buyers I'm working with who might be a fit. Would you be open to a quick conversation?`},
+    {cat:'FSBO', label:'Value Add', body:`Hi ${first}, Bri Wesley here. I work with a lot of FSBOs and I know how much work it is. I'd love to offer you a free CMA and some marketing insights — no strings attached. Would that be helpful?`},
+    {cat:'FSBO', label:'Follow-up', body:`Hi ${first}, Bri from Estēm Realty following up. I know you're handling the sale yourself — I just want to make sure you have all the resources you need. Happy to help however I can.`},
+
+    // ── EXPIRED ────────────────────────────────────────────────────────────────
+    {cat:'Expired', label:'First Outreach', body:`Hi ${first}, this is Bri Wesley with Estēm Realty Group. I noticed your home recently came off the market — I'd love to share what I think went wrong and how I'd approach it differently. Do you have a few minutes?`},
+    {cat:'Expired', label:'Fresh Strategy', body:`Hi ${first}, Bri here. I know it can be frustrating when a listing doesn't sell. I have a specific strategy I use for homes in your area that I'd love to walk you through. Would you be open to a quick call?`},
+    {cat:'Expired', label:'Follow-up', body:`Hi ${first}, Bri Wesley following up. I just wanted to check in — have you decided what direction you're going with the house? I'm happy to help however makes sense for you.`},
+
+    // ── SPHERE ─────────────────────────────────────────────────────────────────
+    {cat:'Sphere', label:'Personal Check-in', body:`Hey ${first}! It's Bri — just thinking about you and wanted to say hi. Hope everything is going great! If you ever need anything real estate related, I'm always here.`},
+    {cat:'Sphere', label:'Market Update', body:`Hey ${first}! Bri here. I've been keeping an eye on the market in your area and wanted to share a few things with you — whether you're thinking of moving or not, it's good info to have. Want me to send it over?`},
+    {cat:'Sphere', label:'Referral Ask', body:`Hey ${first}! Bri Wesley here. I'm growing my business and would love your help. If you know anyone thinking about buying or selling, I'd be so grateful for the introduction. You know I'll take great care of them!`},
+
+    // ── OBJECTIONS ─────────────────────────────────────────────────────────────
+    {cat:'Objections', label:'"Not ready yet"', body:`Totally understand, ${first}! No rush at all — I just want to make sure that when you are ready, you have the right information to make the best decision. Mind if I check in with you in a couple months?`},
+    {cat:'Objections', label:'"Already have an agent"', body:`That's great, ${first}! I respect that. If things ever change or you're looking for a second opinion, I'm always here. Wishing you all the best with your transaction!`},
+    {cat:'Objections', label:'"Not interested"', body:`No problem at all, ${first}! I appreciate you letting me know. I'll get out of your hair — but if anything changes down the road, don't hesitate to reach out. Take care!`},
+    {cat:'Objections', label:'"The market is bad"', body:`I hear you, ${first} — it's a lot to navigate right now. That's actually why I'd love to chat, even briefly. There are still strong moves to be made depending on your situation. Would a 10-minute call be worth it?`},
+
+    // ── FOLLOW-UP ──────────────────────────────────────────────────────────────
+    {cat:'Follow-up', label:'General Check-in', body:`Hi ${first}, Bri Wesley here — just following up! Wanted to see if you had any questions or if anything has changed since we last spoke. Happy to chat whenever works for you.`},
+    {cat:'Follow-up', label:'After No Response', body:`Hey ${first}, Bri here — I know life gets busy! Just wanted to make sure my last message didn't get lost. No pressure at all, just here when you're ready.`},
+    {cat:'Follow-up', label:'Long-Term Nurture', body:`Hi ${first}! Bri Wesley with Estēm Realty. I know the timing hasn't been right — I just wanted to stay in touch. When real estate becomes a priority, I want to be your first call. Hope all is well!`},
+
+    // ── APPOINTMENT CONFIRMATION ───────────────────────────────────────────────
+    {cat:'Appt Confirmation', label:'Day Before', body:`Hi ${first}! Bri Wesley here — just confirming our appointment tomorrow. Looking forward to connecting! Let me know if anything changes.`},
+    {cat:'Appt Confirmation', label:'Morning Of', body:`Good morning ${first}! Bri here — excited for our meeting today. See you soon! Feel free to text or call if you need anything before we meet.`},
+    {cat:'Appt Confirmation', label:'Virtual Meeting', body:`Hi ${first}, Bri Wesley here! Just confirming our call today. Here's the link: [MEETING LINK]. Looking forward to it — talk soon!`},
+
+    // ── APPOINTMENT FOLLOW-UP ─────────────────────────────────────────────────
+    {cat:'Appt Follow-up', label:'Same Day', body:`Hi ${first}! Bri here — it was so great meeting with you today. I'm pulling together everything we discussed and will be in touch shortly. Excited to work together!`},
+    {cat:'Appt Follow-up', label:'Next Steps', body:`Hi ${first}, Bri Wesley here. Thank you again for your time — I wanted to follow up with our next steps. [ADD NEXT STEPS]. Let me know if you have any questions!`},
+    {cat:'Appt Follow-up', label:'No Decision Yet', body:`Hi ${first}, Bri here. No pressure at all — I just wanted to make sure you have everything you need to feel comfortable moving forward. Happy to answer any questions that came up after our meeting.`},
+
+    // ── POST-SHOWING ───────────────────────────────────────────────────────────
+    {cat:'Post-Showing', label:'Quick Check-in', body:`Hi ${first}! Bri here — just wanted to follow up after today's showing. What did you think? Any questions about the property?`},
+    {cat:'Post-Showing', label:'Strong Interest', body:`Hi ${first}, Bri Wesley here! I could tell you really liked [PROPERTY ADDRESS] — I wanted to reach out quickly because I'm seeing strong interest on this one. Want to talk next steps?`},
+    {cat:'Post-Showing', label:'Not the Right Fit', body:`Hi ${first}, Bri here. I know today's home wasn't quite the right fit — that's totally okay! I have a few other options in mind that I think could work better. Want me to send them over?`},
+
+    // ── MARKET UPDATE ─────────────────────────────────────────────────────────
+    {cat:'Market Update', label:'General Update', body:`Hi ${first}, Bri Wesley here! I wanted to share a quick market update for your area — things are moving and I have some insights that might be relevant to you. Want me to send over a summary?`},
+    {cat:'Market Update', label:'Interest Rate News', body:`Hi ${first}, Bri here! Rates just shifted and I wanted to make sure you heard it from me first — this could actually work in your favor. Do you have 5 minutes to chat this week?`},
+    {cat:'Market Update', label:'Inventory Alert', body:`Hi ${first}, Bri Wesley here! Inventory in your target area just opened up — there are some great options I'd love to show you. Want to schedule a tour this week?`},
+
+    // ── VOICEMAIL ─────────────────────────────────────────────────────────────
+    {cat:'Voicemail', label:'Standard VM', body:`Hi ${first}, it's Bri Wesley with Estēm Realty — just thinking about you and wanted to personally reach out. Call or text me when you get a chance. No rush!`},
+    {cat:'Voicemail', label:'Value VM', body:`Hi ${first}, Bri Wesley here with Estēm Realty. I have some market information specific to your area I'd love to share — it'll only take a few minutes. Give me a call back when you get a chance. Thanks!`},
+
+    // ── EMAIL ─────────────────────────────────────────────────────────────────
+    {cat:'Email', label:'Re-Engagement', body:`Subject: Checking In — ${first}\n\nHi ${first},\n\nBri Wesley here from Estēm Realty Group. I wanted to personally reach out and reconnect.\n\nThe market has had some interesting shifts lately — I'd love to share what I'm seeing and how it might affect your plans.\n\nWould you have 10 minutes this week for a quick call?\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
+    {cat:'Email', label:'Market Update', body:`Subject: Market Update for Your Area — ${first}\n\nHi ${first},\n\nBri Wesley here with Estēm Realty Group. I wanted to send over a quick snapshot of what's happening in the market right now.\n\n[ADD MARKET DATA]\n\nWhether you're thinking of making a move or just staying informed, I'm always happy to chat. Feel free to reply here or call/text me directly.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
+    {cat:'Email', label:'New Listings', body:`Subject: New Listings Matching Your Criteria — ${first}\n\nHi ${first},\n\nBri Wesley here from Estēm Realty Group. I pulled together some listings I think you'll love.\n\n[ADD LISTINGS]\n\nLet me know which ones catch your eye and we can schedule tours at your convenience.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
   ]
 
   const cats = [...new Set(scripts.map(s=>s.cat))]
