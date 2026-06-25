@@ -442,6 +442,8 @@ function BulkEmailPanel({ leads, toast, user, onSendConfirmed }) {
   const [draftType,setDraftType] = useState("newsletter");
   const [showDraft,setShowDraft] = useState(false);
   const [subject,setSubject] = useState("");
+  const [subjectOptions,setSubjectOptions] = useState([]);
+  const [previewText,setPreviewText] = useState("");
   const [draftBody,setDraftBody] = useState("");
   const [copied,setCopied] = useState("");
   const [showConfirm,setShowConfirm] = useState(false);
@@ -509,13 +511,33 @@ function BulkEmailPanel({ leads, toast, user, onSendConfirmed }) {
 
   const genDraft = () => {
     const drafts = {
-      newsletter:{subject:"Your Monthly Estēm Real Estate Update",body:`Hi [First Name],\n\nHope this finds you well! Here's your monthly update from Estēm Realty Group.\n\n📍 South DFW Market Snapshot\n[Add market data here]\n\n🏡 Featured Listings\n[Add featured listings here]\n\n💡 Tips & Resources\n[Add tips here]\n\nAs always, I'm here for any real estate questions. Just reply to this email!\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
-      reengagement:{subject:"Checking In — Are Your Real Estate Plans Still On the Radar?",body:`Hi [First Name],\n\nBri Wesley here from Estēm Realty Group — I wanted to personally reach out and reconnect.\n\nThe market has had some interesting shifts lately and I'd love to share what I'm seeing.\n\nNo pressure at all — just want to make sure you have the right information when the time is right.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group\n📱 [Your Phone]`},
-      market:{subject:"Quick Market Update You'll Want to See",body:`Hi [First Name],\n\nBri Wesley here from Estēm Realty Group — I wanted to share a quick update on what's happening in the South DFW market.\n\n📊 Here's what I'm seeing:\n• [Key market stat]\n• [Inventory note]\n• [Rate/opportunity note]\n\nWhether you're thinking of making a move soon or just staying informed, this is worth knowing.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
-      listings:{subject:"New Listings Just Hit — Here's What I'm Seeing",body:`Hi [First Name],\n\nBri Wesley here — some listings just came on the market that I think are worth your attention.\n\n🏡 [Add listing details here]\n\nIf any of these look interesting, reply to this email or text me and I'll set up a showing.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
+      newsletter:{
+        subjects:["Your Monthly Estēm Real Estate Update","South DFW Market News You'll Want to See","This Month in South DFW Real Estate"],
+        preview:"Market trends, new listings, and what's happening in South DFW this month.",
+        body:`Hi [First Name],\n\nHope this finds you well! Here's your monthly update from Estēm Realty Group.\n\n📍 South DFW Market Snapshot\n[Add market data here]\n\n🏡 Featured Listings\n[Add featured listings here]\n\n💡 Tips & Resources\n[Add tips here]\n\nAs always, I'm here for any real estate questions. Just reply to this email!\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`,
+      },
+      reengagement:{
+        subjects:["Checking In — Are Your Real Estate Plans Still On the Radar?","Still Thinking About a Move?","A Quick Hello From Bri Wesley"],
+        preview:"No pressure — just want to make sure you have the right information when you're ready.",
+        body:`Hi [First Name],\n\nBri Wesley here from Estēm Realty Group — I wanted to personally reach out and reconnect.\n\nThe market has had some interesting shifts lately and I'd love to share what I'm seeing.\n\nNo pressure at all — just want to make sure you have the right information when the time is right.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group\n📱 [Your Phone]`,
+      },
+      market:{
+        subjects:["Quick Market Update You'll Want to See","What's Happening in the South DFW Market Right Now","A Market Snapshot for You"],
+        preview:"Here's what I'm seeing in inventory, pricing, and rates this month.",
+        body:`Hi [First Name],\n\nBri Wesley here from Estēm Realty Group — I wanted to share a quick update on what's happening in the South DFW market.\n\n📊 Here's what I'm seeing:\n• [Key market stat]\n• [Inventory note]\n• [Rate/opportunity note]\n\nWhether you're thinking of making a move soon or just staying informed, this is worth knowing.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`,
+      },
+      listings:{
+        subjects:["New Listings Just Hit — Here's What I'm Seeing","Fresh Listings You Might Love","Just Listed in South DFW"],
+        preview:"A few new listings just came on the market — take a look.",
+        body:`Hi [First Name],\n\nBri Wesley here — some listings just came on the market that I think are worth your attention.\n\n🏡 [Add listing details here]\n\nIf any of these look interesting, reply to this email or text me and I'll set up a showing.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`,
+      },
     };
     const d=drafts[draftType]||drafts.newsletter;
-    setSubject(d.subject); setDraftBody(d.body); setShowDraft(true);
+    setSubjectOptions(d.subjects);
+    setSubject(d.subjects[0]);
+    setPreviewText(d.preview);
+    setDraftBody(d.body);
+    setShowDraft(true);
   };
 
   // Confirm-send: writes timeline note + last_email_sent + lcd reset for each
@@ -598,7 +620,9 @@ function BulkEmailPanel({ leads, toast, user, onSendConfirmed }) {
         <button onClick={()=>copy(selLeads.map(l=>l.email).filter(Boolean).join(", "),"comma")} disabled={selLeads.length===0} style={{padding:"5px 12px",fontSize:10,border:"none",background:selLeads.length?"var(--black)":"var(--gray)",color:"white",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>{copied==="comma"?"✓ Copied!":"📋 Copy Emails (comma)"}</button>
         <button onClick={()=>copy(selLeads.map(l=>l.email).filter(Boolean).join("\n"),"newline")} disabled={selLeads.length===0} style={{padding:"5px 12px",fontSize:10,border:"1px solid var(--border2)",background:"white",color:"var(--black)",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>{copied==="newline"?"✓ Copied!":"📋 Copy (one per line, for BCC)"}</button>
         <button onClick={downloadCSV} disabled={selLeads.length===0} style={{padding:"5px 12px",fontSize:10,border:"1px solid var(--border2)",background:"white",color:"var(--black)",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>⬇ Download CSV</button>
+        <button onClick={()=>setShowConfirm(true)} disabled={selLeads.length===0} style={{padding:"5px 12px",fontSize:10,border:"1px solid var(--green)",background:"white",color:"var(--green)",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>✓ Mark Selected as Emailed</button>
       </div>
+      {selLeads.length>0 && <div style={{fontSize:9,color:"var(--gray)",marginTop:-6,marginBottom:10}}>Use "Mark Selected as Emailed" any time after you've sent in Gmail — no draft required first.</div>}
 
       {/* Campaign draft */}
       <div style={{paddingTop:10,borderTop:"1px solid rgba(196,164,90,0.3)"}}>
@@ -621,30 +645,63 @@ function BulkEmailPanel({ leads, toast, user, onSendConfirmed }) {
           <button onClick={()=>setShowDraft(false)} style={{fontSize:9,padding:"3px 9px",border:"1px solid var(--border2)",background:"white",cursor:"pointer",fontFamily:"Georgia,serif"}}>✕</button>
         </div>
       </div>
+
+      {/* Subject line options */}
+      {subjectOptions.length>0 && <div style={{marginBottom:8}}>
+        <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--gray)",marginBottom:4}}>Subject Line Options — click to use</div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {subjectOptions.map((s,i)=><button key={i} onClick={()=>setSubject(s)} style={{textAlign:"left",padding:"6px 9px",fontSize:11,border:`1px solid ${subject===s?"var(--gold)":"var(--border2)"}`,background:subject===s?"#FAF6EC":"white",color:"var(--black)",cursor:"pointer",fontFamily:"Georgia,serif"}}>
+            {subject===s&&"✓ "}{s}
+          </button>)}
+        </div>
+      </div>}
+
       <div style={{marginBottom:6}}>
         <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--gray)",marginBottom:3}}>Subject</div>
         <input value={subject} onChange={e=>setSubject(e.target.value)} style={{width:"100%",padding:"6px 8px",border:"1px solid var(--border2)",fontFamily:"Georgia,serif",fontSize:11,outline:"none",background:"var(--cream)"}}/>
       </div>
+
+      <div style={{marginBottom:6}}>
+        <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--gray)",marginBottom:3}}>Preview Text (preheader — shows after subject line in most inboxes)</div>
+        <input value={previewText} onChange={e=>setPreviewText(e.target.value)} placeholder="Short teaser line shown next to the subject in the inbox..." style={{width:"100%",padding:"6px 8px",border:"1px solid var(--border2)",fontFamily:"Georgia,serif",fontSize:11,outline:"none",background:"var(--cream)"}}/>
+        <div style={{fontSize:9,color:"var(--gray)",marginTop:3}}>Paste this as the first line of your Gmail draft, or use Gmail's preview-text feature if available — Gmail's compose box doesn't have a separate preheader field.</div>
+      </div>
+
       <div style={{marginBottom:10}}>
         <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--gray)",marginBottom:3}}>Body — replace [bracketed items] before sending</div>
         <textarea value={draftBody} onChange={e=>setDraftBody(e.target.value)} rows={14} style={{width:"100%",padding:"7px 8px",border:"1px solid var(--border2)",fontFamily:"Georgia,serif",fontSize:11,outline:"none",resize:"vertical",background:"#FFFEF8",lineHeight:1.7}}/>
       </div>
 
+      {/* Attachment reminder */}
+      <div style={{background:"#FFF8E8",border:"1px solid rgba(196,164,90,0.5)",padding:"9px 12px",marginBottom:10,fontSize:10,color:"var(--black2)",display:"flex",alignItems:"flex-start",gap:7}}>
+        <span style={{fontSize:14}}>📎</span>
+        <span><strong>Attach your Canva newsletter PDF/image in Gmail before sending.</strong> This CRM doesn't attach files yet — open your Gmail draft and add the attachment manually before hitting send.</span>
+      </div>
+
       {/* Live preview */}
       <div style={{background:"var(--cream2)",border:"1px solid var(--border)",padding:"10px 12px",marginBottom:10}}>
         <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--gray)",marginBottom:6}}>Preview — as {selLeads[0]?.name?.split(" ")[0]||"[First Name]"} will see it</div>
-        <div style={{fontSize:11,fontWeight:"bold",marginBottom:6}}>{subject.replace("[First Name]", selLeads[0]?.name?.split(" ")[0]||"[First Name]")}</div>
+        <div style={{fontSize:11,fontWeight:"bold",marginBottom:2}}>{subject.replace("[First Name]", selLeads[0]?.name?.split(" ")[0]||"[First Name]")}</div>
+        {previewText && <div style={{fontSize:10,color:"var(--gray)",fontStyle:"italic",marginBottom:6}}>{previewText}</div>}
         <div style={{fontSize:11,lineHeight:1.7,whiteSpace:"pre-line",color:"var(--black2)"}}>{draftBody.replace(/\[First Name\]/g, selLeads[0]?.name?.split(" ")[0]||"[First Name]")}</div>
       </div>
 
-      <div style={{fontSize:10,color:"var(--gray)",marginBottom:10}}>{selLeads.filter(l=>l.email).length} recipients ready · Copy this into Gmail (one draft per lead, or one BCC blast), personalize [First Name] per recipient, then send from Gmail yourself.</div>
+      {/* Batch size warning */}
+      {selLeads.length>0 && <div style={{background: selLeads.length>100?"#FDF0F0":"#F0F8FF", border:`1px solid ${selLeads.length>100?"#E0B0B0":"#B0CCE0"}`, padding:"8px 12px", marginBottom:10, fontSize:10, color:"var(--black2)"}}>
+        <strong>Recommended Gmail batch size: 50–100 recipients per send.</strong>{" "}
+        {selLeads.length>100
+          ? <span style={{color:"#A32D2D"}}>You have {selLeads.length} selected — consider splitting this into {Math.ceil(selLeads.length/100)} smaller batches to reduce the risk of Gmail flagging the send.</span>
+          : <span>You have {selLeads.length} selected — within the recommended range.</span>}
+      </div>}
+
+      <div style={{fontSize:10,color:"var(--gray)",marginBottom:10}}>{selLeads.filter(l=>l.email).length} recipients ready · Copy this into Gmail (one draft per lead, or one BCC blast), personalize [First Name] per recipient, attach your newsletter file, then send from Gmail yourself.</div>
 
       <div style={{paddingTop:10,borderTop:"1px solid var(--border)"}}>
         <div style={{fontSize:9,letterSpacing:1,textTransform:"uppercase",color:"var(--gray)",marginBottom:6}}>3. After you've sent it from Gmail</div>
         <button onClick={()=>setShowConfirm(true)} disabled={selLeads.length===0} style={{padding:"6px 14px",fontSize:11,border:"none",background:selLeads.length?"var(--green)":"var(--gray)",color:"white",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>
-          ✓ I sent this — log it for {selLeads.length} lead{selLeads.length!==1?"s":""}
+          ✓ Mark selected as emailed ({selLeads.length})
         </button>
-        <div style={{fontSize:9,color:"var(--gray)",marginTop:5}}>This does NOT send anything. It only logs the activity to each lead's timeline and updates Last Contacted / Last Email Sent — after you confirm you already sent it.</div>
+        <div style={{fontSize:9,color:"var(--gray)",marginTop:5}}>This does NOT send anything. It only logs the activity to each selected lead's timeline and updates Last Contacted / Last Email Sent — after you confirm you already sent it.</div>
       </div>
     </div>}
 
