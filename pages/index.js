@@ -149,6 +149,39 @@ function AIInsight({ lead }) {
   </div>;
 }
 
+// ─── AI Live Result (Phase 2A) ────────────────────────────────────────────────
+function AILiveResult({ result }) {
+  const tempColor = {Hot:"var(--red)",Warm:"var(--gold2)",Cold:"var(--blue)",Dormant:"var(--gray)"}[result.temperature]||"var(--gray)";
+  const [pscp,setPscp] = useState(false);
+  const [escp,setEscp] = useState(false);
+  return <div style={{fontSize:11,lineHeight:1.7}}>
+    <div style={{background:"linear-gradient(135deg,#FAF8F4,#FAF6EC)",border:"1px solid rgba(196,164,90,0.35)",padding:"10px 12px",marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+        <span style={{fontSize:9,fontWeight:"bold",padding:"2px 7px",border:`1px solid ${tempColor}`,color:tempColor,background:"white"}}>{result.temperature}</span>
+        <span style={{fontSize:10,color:"var(--black)",fontStyle:"italic"}}>{result.lead_summary}</span>
+      </div>
+      <div style={{fontSize:10}}><strong>Why now:</strong> {result.priority_reason}</div>
+      <div style={{fontSize:10,marginTop:3}}><strong>Next action:</strong> {result.next_action}</div>
+      <div style={{fontSize:10,marginTop:3}}><strong>Follow-up:</strong> {result.follow_up_timing}</div>
+      {result.conversation_starter&&<div style={{fontSize:10,marginTop:3,background:"white",padding:"4px 8px",border:"1px solid var(--border)"}}><strong>Opener:</strong> "{result.conversation_starter}"</div>}
+    </div>
+    {result.ps&&<div style={{background:"white",border:"1px solid var(--border)",padding:"8px 10px",marginBottom:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <div style={{fontSize:9,fontWeight:"bold",color:"var(--gold2)",letterSpacing:.5}}>📱 LIVE TEXT/CALL SCRIPT</div>
+        <button onClick={()=>{navigator.clipboard.writeText(result.ps);setPscp(true);setTimeout(()=>setPscp(false),2000);}} style={{fontSize:8,padding:"2px 7px",background:pscp?"var(--green)":"var(--black)",color:"white",border:"none",fontFamily:"Georgia,serif",cursor:"pointer"}}>{pscp?"✓ Copied":"Copy"}</button>
+      </div>
+      <div style={{fontSize:11,lineHeight:1.6,color:"var(--black2)"}}>{result.ps}</div>
+    </div>}
+    {result.es&&<div style={{background:"white",border:"1px solid var(--border)",padding:"8px 10px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <div style={{fontSize:9,fontWeight:"bold",color:"var(--gold2)",letterSpacing:.5}}>✉ LIVE EMAIL DRAFT</div>
+        <button onClick={()=>{navigator.clipboard.writeText(result.es);setEscp(true);setTimeout(()=>setEscp(false),2000);}} style={{fontSize:8,padding:"2px 7px",background:escp?"var(--green)":"var(--black)",color:"white",border:"none",fontFamily:"Georgia,serif",cursor:"pointer"}}>{escp?"✓ Copied":"Copy"}</button>
+      </div>
+      <div style={{fontSize:11,lineHeight:1.7,color:"var(--black2)",whiteSpace:"pre-line"}}>{result.es}</div>
+    </div>}
+  </div>;
+}
+
 // ─── Script Library ───────────────────────────────────────────────────────────
 function ScriptLibrary({ lead, setNoteText }) {
   const fn = (lead.name||"").split(" ")[0]||"there";
@@ -781,9 +814,47 @@ function ArchiveTab({ arch, restoreLead }) {
 
 // ─── Lead Detail Panel ────────────────────────────────────────────────────────
 function LeadPanel({ lead, notes, user, noteText, setNoteText, noteType, setNoteType, addNote, markRevived, archiveLead, setEditLead, close, saveLead, setLeads, toast }) {
+  const [aiResult, setAiResult] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const refreshAI = async () => {
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/refresh-lead-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_id: lead.id }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setAiResult(data.ai);
+        toast && toast("✓ AI recommendations updated");
+      } else {
+        toast && toast("AI refresh failed");
+      }
+    } catch (err) {
+      toast && toast("AI refresh error");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const addNoteAndRefresh = async () => {
+    await addNote();
+    // Background AI refresh after note saves — silent
+    fetch("/api/refresh-lead-ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_id: lead.id }),
+    }).then(r => r.json()).then(data => {
+      if (data.ok) setAiResult(data.ai);
+    }).catch(() => {});
+  };
+
   return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"22px 14px",overflowY:"auto"}} onClick={e=>e.target===e.currentTarget&&close()}>
     <div style={{background:"white",width:"100%",maxWidth:900,padding:22,position:"relative",margin:"auto"}}>
       <button onClick={close} style={{position:"absolute",top:11,right:14,background:"none",border:"none",fontSize:19,cursor:"pointer",color:"var(--gray)"}}>×</button>
+
 
       {/* Header */}
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
@@ -835,8 +906,13 @@ function LeadPanel({ lead, notes, user, noteText, setNoteText, noteType, setNote
             }}
           />
 
-          <SectionLabel style={{marginTop:14}}>AI Recommendation</SectionLabel>
-          <AIInsight lead={lead}/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:14,marginBottom:6}}>
+            <SectionLabel style={{marginBottom:0,borderBottom:"none",paddingBottom:0}}>AI Recommendation</SectionLabel>
+            <button onClick={refreshAI} disabled={aiLoading} style={{fontFamily:"Georgia,serif",fontSize:9,padding:"3px 9px",border:"1px solid var(--border2)",background:aiLoading?"var(--cream2)":"var(--black)",color:aiLoading?"var(--gray)":"var(--cream)",cursor:aiLoading?"default":"pointer"}}>
+              {aiLoading ? "⟳ Updating..." : "⟳ Refresh AI"}
+            </button>
+          </div>
+          {aiResult ? <AILiveResult result={aiResult}/> : <AIInsight lead={lead}/>}
         </div>
 
         {/* Column 2: Notes */}
@@ -850,7 +926,7 @@ function LeadPanel({ lead, notes, user, noteText, setNoteText, noteType, setNote
           </div>
           <textarea value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="Enter note, call outcome, text response, appointment details..." rows={5} style={{width:"100%",marginBottom:6,fontFamily:"Georgia,serif",fontSize:11,padding:8,border:"1px solid var(--border2)",background:"var(--cream)",resize:"vertical"}}/>
           <div style={{display:"flex",gap:5,alignItems:"center",marginBottom:14}}>
-            <button onClick={addNote} style={{flex:1,background:"var(--black)",color:"var(--cream)",border:"none",padding:"6px 13px",fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer"}}>✓ Save Note</button>
+            <button onClick={addNoteAndRefresh} style={{flex:1,background:"var(--black)",color:"var(--cream)",border:"none",padding:"6px 13px",fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer"}}>✓ Save Note</button>
             <div style={{fontSize:9,color:"var(--gray)",textAlign:"right"}}>Logged as:<br/><strong>{user}</strong></div>
           </div>
 
