@@ -422,80 +422,189 @@ function BulkTagPanel({ leads, toast, onBatchSave, onLeadsUpdated }) {
 }
 
 // ─── BULK EMAIL PANEL ─────────────────────────────────────────────────────────
-function BulkEmailPanel({ leads, toast }) {
+// ─── BULK EMAIL PANEL (v2 — manual-confirm send workflow) ────────────────────
+// Architecture note: the CRM cannot send Gmail directly (no OAuth/send infra
+// per explicit instruction). This panel prepares the recipient list + draft
+// copy, then hands off a ready-to-paste/ready-to-draft package. Once Bri
+// confirms in the CRM that she actually sent the email from Gmail, the CRM
+// writes the timeline note + last_email_sent + lcd update — nothing is
+// logged until she explicitly confirms.
+
+function BulkEmailPanel({ leads, toast, user, onSendConfirmed }) {
   const [stageFilter,setStageFilter] = useState("all");
+  const [tempFilter,setTempFilter] = useState("all");
   const [tagFilter,setTagFilter] = useState("");
+  const [cityFilter,setCityFilter] = useState("all");
+  const [assignedFilter,setAssignedFilter] = useState("all");
   const [search,setSearch] = useState("");
   const [emailOnly,setEmailOnly] = useState(true);
   const [selected,setSelected] = useState(new Set());
-  const [draftType,setDraftType] = useState("reengagement");
+  const [draftType,setDraftType] = useState("newsletter");
   const [showDraft,setShowDraft] = useState(false);
   const [subject,setSubject] = useState("");
   const [draftBody,setDraftBody] = useState("");
   const [copied,setCopied] = useState("");
+  const [showConfirm,setShowConfirm] = useState(false);
+  const [confirming,setConfirming] = useState(false);
+  const [confirmProgress,setConfirmProgress] = useState(null);
+
+  // Derive temperature from tags (Hot/Warm/Cold/Dormant), since that's the
+  // only place "AI category" data currently lives on a lead.
+  const tempOf = (l) => {
+    const t = (l.tags||"").toLowerCase();
+    if (t.includes("hot")) return "Hot";
+    if (t.includes("warm")) return "Warm";
+    if (t.includes("cold")) return "Cold";
+    if ((l.stage||"").startsWith("Re-Engagement")) return "Dormant";
+    return "Unknown";
+  };
+
+  const cities = useMemo(() => {
+    const set = new Set(leads.map(l=>(l.city||"").trim()).filter(Boolean));
+    return [...set].sort();
+  }, [leads]);
+
+  const assignees = useMemo(() => {
+    const set = new Set(leads.map(l=>(l.assigned||"").trim()).filter(Boolean));
+    return [...set].sort();
+  }, [leads]);
 
   const filtered = useMemo(()=>{
     let list = leads.filter(l=>!l.is_archived);
-    if (emailOnly) list=list.filter(l=>l.email&&l.email.trim());
-    if (stageFilter!=="all") list=list.filter(l=>l.stage===stageFilter);
-    if (tagFilter) list=list.filter(l=>(l.tags||"").toLowerCase().includes(tagFilter.toLowerCase()));
+    if (emailOnly) list = list.filter(l=>l.email&&l.email.trim()&&l.email.includes("@"));
+    if (stageFilter!=="all") list = list.filter(l=>l.stage===stageFilter);
+    if (tempFilter!=="all") list = list.filter(l=>tempOf(l)===tempFilter);
+    if (tagFilter) list = list.filter(l=>(l.tags||"").toLowerCase().includes(tagFilter.toLowerCase()));
+    if (cityFilter!=="all") list = list.filter(l=>(l.city||"")===cityFilter);
+    if (assignedFilter!=="all") list = list.filter(l=>(l.assigned||"")===assignedFilter);
     if (search) { const s=search.toLowerCase(); list=list.filter(l=>(l.name||"").toLowerCase().includes(s)||(l.email||"").toLowerCase().includes(s)||(l.tags||"").toLowerCase().includes(s)); }
     return list;
-  },[leads,stageFilter,tagFilter,search,emailOnly]);
+  },[leads,stageFilter,tempFilter,tagFilter,cityFilter,assignedFilter,search,emailOnly]);
+
+  // Skipped = matched filters but no usable email
+  const skipped = useMemo(()=>{
+    let list = leads.filter(l=>!l.is_archived);
+    if (stageFilter!=="all") list = list.filter(l=>l.stage===stageFilter);
+    if (tempFilter!=="all") list = list.filter(l=>tempOf(l)===tempFilter);
+    if (tagFilter) list = list.filter(l=>(l.tags||"").toLowerCase().includes(tagFilter.toLowerCase()));
+    if (cityFilter!=="all") list = list.filter(l=>(l.city||"")===cityFilter);
+    if (assignedFilter!=="all") list = list.filter(l=>(l.assigned||"")===assignedFilter);
+    return list.filter(l=>!l.email||!l.email.trim()||!l.email.includes("@"));
+  },[leads,stageFilter,tempFilter,tagFilter,cityFilter,assignedFilter]);
 
   const allSel = filtered.length>0 && filtered.every(l=>selected.has(l.id));
   const selLeads = filtered.filter(l=>selected.has(l.id));
   const toggleAll = () => setSelected(prev=>{ const n=new Set(prev); allSel?filtered.forEach(l=>n.delete(l.id)):filtered.forEach(l=>n.add(l.id)); return n; });
+  const selectFiltered = () => setSelected(new Set(filtered.map(l=>l.id)));
+  const selectAllLeads = () => setSelected(new Set(leads.filter(l=>!l.is_archived&&l.email&&l.email.includes("@")).map(l=>l.id)));
+  const clearSelection = () => setSelected(new Set());
 
   const copy = (text,key) => { navigator.clipboard.writeText(text); setCopied(key); setTimeout(()=>setCopied(""),2500); toast&&toast(`✓ Copied`); };
 
   const downloadCSV = () => {
-    const rows=[["Name","Email","Phone","Stage","Tags"].join(","),...selLeads.map(l=>[`"${l.name||""}"`,`"${l.email||""}"`,`"${l.phone||""}"`,`"${l.stage||""}"`,`"${(l.tags||"").replace(/"/g,"'")}"`].join(","))].join("\n");
-    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([rows],{type:"text/csv"})); a.download=`estem-leads-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    const rows=[["Name","Email","Phone","Stage","Temperature","City","Assigned","Tags"].join(","),...selLeads.map(l=>[`"${l.name||""}"`,`"${l.email||""}"`,`"${l.phone||""}"`,`"${l.stage||""}"`,`"${tempOf(l)}"`,`"${l.city||""}"`,`"${l.assigned||""}"`,`"${(l.tags||"").replace(/"/g,"'")}"`].join(","))].join("\n");
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([rows],{type:"text/csv"})); a.download=`estem-newsletter-list-${new Date().toISOString().slice(0,10)}.csv`; a.click();
     toast&&toast(`✓ CSV downloaded`);
   };
 
   const genDraft = () => {
     const drafts = {
+      newsletter:{subject:"Your Monthly Estēm Real Estate Update",body:`Hi [First Name],\n\nHope this finds you well! Here's your monthly update from Estēm Realty Group.\n\n📍 South DFW Market Snapshot\n[Add market data here]\n\n🏡 Featured Listings\n[Add featured listings here]\n\n💡 Tips & Resources\n[Add tips here]\n\nAs always, I'm here for any real estate questions. Just reply to this email!\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
       reengagement:{subject:"Checking In — Are Your Real Estate Plans Still On the Radar?",body:`Hi [First Name],\n\nBri Wesley here from Estēm Realty Group — I wanted to personally reach out and reconnect.\n\nThe market has had some interesting shifts lately and I'd love to share what I'm seeing.\n\nNo pressure at all — just want to make sure you have the right information when the time is right.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group\n📱 [Your Phone]`},
       market:{subject:"Quick Market Update You'll Want to See",body:`Hi [First Name],\n\nBri Wesley here from Estēm Realty Group — I wanted to share a quick update on what's happening in the South DFW market.\n\n📊 Here's what I'm seeing:\n• [Key market stat]\n• [Inventory note]\n• [Rate/opportunity note]\n\nWhether you're thinking of making a move soon or just staying informed, this is worth knowing.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
       listings:{subject:"New Listings Just Hit — Here's What I'm Seeing",body:`Hi [First Name],\n\nBri Wesley here — some listings just came on the market that I think are worth your attention.\n\n🏡 [Add listing details here]\n\nIf any of these look interesting, reply to this email or text me and I'll set up a showing.\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
-      newsletter:{subject:"Your Monthly Estēm Real Estate Update",body:`Hi [First Name],\n\nHope this finds you well! Here's your monthly update from Estēm Realty Group.\n\n📍 South DFW Market Snapshot\n[Add market data here]\n\n🏡 Featured Listings\n[Add featured listings here]\n\n💡 Tips & Resources\n[Add tips here]\n\nAs always, I'm here for any real estate questions. Just reply to this email!\n\nWarm regards,\nBri Wesley\nEstēm Realty Group`},
     };
-    const d=drafts[draftType]||drafts.reengagement;
+    const d=drafts[draftType]||drafts.newsletter;
     setSubject(d.subject); setDraftBody(d.body); setShowDraft(true);
+  };
+
+  // Confirm-send: writes timeline note + last_email_sent + lcd reset for each
+  // selected lead. Only runs when Bri explicitly confirms she already sent
+  // the email from Gmail. No automatic logging happens before this.
+  const confirmSend = async () => {
+    if (selLeads.length===0) return;
+    setConfirming(true);
+    const today = new Date().toISOString().slice(0,10);
+    let done=0;
+    for (const lead of selLeads) {
+      await fetch("/api/notes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        lead_id: lead.id,
+        text: `Email sent: "${subject || draftType}"`,
+        type: "email",
+        user_name: user || "Bri",
+      })});
+      await fetch("/api/leads",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        id: lead.id,
+        last_email_sent: today,
+        lcd: 0,
+      })});
+      done++; setConfirmProgress(`${done}/${selLeads.length}`);
+    }
+    onSendConfirmed && onSendConfirmed(selLeads.map(l=>({...l,last_email_sent:today,lcd:0})));
+    setConfirming(false); setConfirmProgress(null); setShowConfirm(false);
+    toast && toast(`✓ Logged: ${done} lead(s) marked as emailed`);
+    setSelected(new Set());
   };
 
   return <div>
     <div style={{fontFamily:"Georgia,serif",fontSize:18,marginBottom:3}}>✉ Bulk Email & Newsletter</div>
-    <div style={{fontSize:11,color:"var(--gray)",marginBottom:14}}>Filter leads → select → copy email list, download CSV, or generate a campaign draft to copy into your email tool.</div>
+    <div style={{fontSize:11,color:"var(--gray)",marginBottom:14}}>Filter → select → generate copy → create the email in Gmail yourself → confirm here once sent.</div>
 
     {/* Filters */}
     <div style={{background:"white",border:"1px solid var(--border)",padding:14,marginBottom:12}}>
+      <div style={{fontSize:9,letterSpacing:1,textTransform:"uppercase",color:"var(--gray)",marginBottom:8}}>Filter Recipients</div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8,alignItems:"center"}}>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name / email / tag..." style={{padding:"5px 9px",border:"1px solid var(--border2)",background:"var(--cream)",fontSize:11,fontFamily:"Georgia,serif",width:220,outline:"none"}}/>
         <input value={tagFilter} onChange={e=>setTagFilter(e.target.value)} placeholder="Filter by tag..." style={{padding:"5px 9px",border:"1px solid var(--border2)",background:"var(--cream)",fontSize:11,fontFamily:"Georgia,serif",width:160,outline:"none"}}/>
-        <label style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"var(--gray)",cursor:"pointer"}}><input type="checkbox" checked={emailOnly} onChange={e=>setEmailOnly(e.target.checked)}/> Email addresses only</label>
+        <select value={cityFilter} onChange={e=>setCityFilter(e.target.value)} style={{padding:"5px 9px",border:"1px solid var(--border2)",background:"var(--cream)",fontSize:11,fontFamily:"Georgia,serif"}}>
+          <option value="all">All Cities</option>
+          {cities.map(c=><option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={assignedFilter} onChange={e=>setAssignedFilter(e.target.value)} style={{padding:"5px 9px",border:"1px solid var(--border2)",background:"var(--cream)",fontSize:11,fontFamily:"Georgia,serif"}}>
+          <option value="all">All Agents</option>
+          {assignees.map(a=><option key={a} value={a}>{a}</option>)}
+        </select>
+        <label style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"var(--gray)",cursor:"pointer"}}>
+          <input type="checkbox" checked={emailOnly} onChange={e=>setEmailOnly(e.target.checked)}/> Valid email only
+        </label>
+      </div>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:7}}>
+        {["all",...STAGES].map(s=><button key={s} onClick={()=>setStageFilter(s)} style={{padding:"3px 9px",fontSize:9,border:"1px solid var(--border2)",background:stageFilter===s?"var(--black)":"white",color:stageFilter===s?"var(--cream)":"var(--gray)",cursor:"pointer",fontFamily:"Georgia,serif"}}>{s==="all"?"All Stages":s}</button>)}
       </div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-        {["all",...STAGES].map(s=><button key={s} onClick={()=>setStageFilter(s)} style={{padding:"3px 9px",fontSize:9,border:"1px solid var(--border2)",background:stageFilter===s?"var(--black)":"white",color:stageFilter===s?"var(--cream)":"var(--gray)",cursor:"pointer",fontFamily:"Georgia,serif"}}>{s==="all"?"All Stages":s}</button>)}
+        <span style={{fontSize:9,color:"var(--gray)",alignSelf:"center",marginRight:2}}>AI Temperature:</span>
+        {["all","Hot","Warm","Cold","Dormant"].map(t=><button key={t} onClick={()=>setTempFilter(t)} style={{padding:"3px 9px",fontSize:9,border:"1px solid var(--border2)",background:tempFilter===t?"var(--black)":"white",color:tempFilter===t?"var(--cream)":"var(--gray)",cursor:"pointer",fontFamily:"Georgia,serif"}}>{t==="all"?"All":t}</button>)}
       </div>
     </div>
 
-    {/* Action bar */}
+    {/* Selection + recipient count */}
     <div style={{background:"linear-gradient(135deg,#FAF8F4,#FAF6EC)",border:"1px solid rgba(196,164,90,0.4)",padding:"12px 16px",marginBottom:12}}>
-      <div style={{fontSize:10,color:"var(--gray)",marginBottom:8}}><strong style={{color:"var(--black)"}}>{selected.size}</strong> selected · {selLeads.filter(l=>l.email).length} with email</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:6}}>
+        <div style={{fontSize:13,fontFamily:"Georgia,serif"}}>
+          <strong style={{color:"var(--gold2)",fontSize:18}}>{selected.size}</strong> recipient{selected.size!==1?"s":""} selected
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button onClick={selectFiltered} style={{fontSize:9,padding:"3px 9px",border:"1px solid var(--border2)",background:"white",cursor:"pointer",fontFamily:"Georgia,serif"}}>Select Filtered ({filtered.length})</button>
+          <button onClick={selectAllLeads} style={{fontSize:9,padding:"3px 9px",border:"1px solid var(--border2)",background:"white",cursor:"pointer",fontFamily:"Georgia,serif"}}>Select All Leads</button>
+          <button onClick={clearSelection} style={{fontSize:9,padding:"3px 9px",border:"1px solid var(--border2)",background:"white",cursor:"pointer",fontFamily:"Georgia,serif"}}>Clear</button>
+        </div>
+      </div>
+      {skipped.length>0 && <div style={{fontSize:10,color:"#A32D2D",background:"#FDF0F0",border:"1px solid #E0B0B0",padding:"5px 9px",marginBottom:8}}>
+        ⚠ {skipped.length} lead{skipped.length!==1?"s":""} matched your filters but {skipped.length!==1?"have":"has"} no valid email — they'll be skipped automatically.
+        {" "}<button onClick={()=>copy(skipped.map(l=>l.name).join(", "),"skipped")} style={{fontSize:9,padding:"1px 6px",border:"1px solid #A32D2D",background:"white",color:"#A32D2D",cursor:"pointer",fontFamily:"Georgia,serif"}}>{copied==="skipped"?"✓ Copied":"Copy skipped names"}</button>
+      </div>}
+
       <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
         <button onClick={()=>copy(selLeads.map(l=>l.email).filter(Boolean).join(", "),"comma")} disabled={selLeads.length===0} style={{padding:"5px 12px",fontSize:10,border:"none",background:selLeads.length?"var(--black)":"var(--gray)",color:"white",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>{copied==="comma"?"✓ Copied!":"📋 Copy Emails (comma)"}</button>
-        <button onClick={()=>copy(selLeads.map(l=>l.email).filter(Boolean).join("\n"),"newline")} disabled={selLeads.length===0} style={{padding:"5px 12px",fontSize:10,border:"1px solid var(--border2)",background:"white",color:"var(--black)",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>{copied==="newline"?"✓ Copied!":"📋 Copy (one per line)"}</button>
+        <button onClick={()=>copy(selLeads.map(l=>l.email).filter(Boolean).join("\n"),"newline")} disabled={selLeads.length===0} style={{padding:"5px 12px",fontSize:10,border:"1px solid var(--border2)",background:"white",color:"var(--black)",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>{copied==="newline"?"✓ Copied!":"📋 Copy (one per line, for BCC)"}</button>
         <button onClick={downloadCSV} disabled={selLeads.length===0} style={{padding:"5px 12px",fontSize:10,border:"1px solid var(--border2)",background:"white",color:"var(--black)",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>⬇ Download CSV</button>
       </div>
 
       {/* Campaign draft */}
       <div style={{paddingTop:10,borderTop:"1px solid rgba(196,164,90,0.3)"}}>
-        <div style={{fontSize:9,letterSpacing:1,textTransform:"uppercase",color:"var(--gray)",marginBottom:6}}>Generate Campaign Draft</div>
+        <div style={{fontSize:9,letterSpacing:1,textTransform:"uppercase",color:"var(--gray)",marginBottom:6}}>1. Generate Email Copy</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-          {[["reengagement","↻ Re-Engagement"],["market","📊 Market Update"],["listings","🏡 New Listings"],["newsletter","📰 Newsletter"]].map(([v,label])=>
+          {[["newsletter","📰 Newsletter"],["reengagement","↻ Re-Engagement"],["market","📊 Market Update"],["listings","🏡 New Listings"]].map(([v,label])=>
             <button key={v} onClick={()=>setDraftType(v)} style={{padding:"3px 9px",fontSize:9,border:"1px solid var(--border2)",background:draftType===v?"var(--black)":"white",color:draftType===v?"var(--cream)":"var(--gray)",cursor:"pointer",fontFamily:"Georgia,serif"}}>{label}</button>
           )}
           <button onClick={genDraft} style={{padding:"5px 12px",fontSize:10,border:"none",background:"var(--black)",color:"var(--cream)",cursor:"pointer",fontFamily:"Georgia,serif"}}>Generate Draft →</button>
@@ -506,7 +615,7 @@ function BulkEmailPanel({ leads, toast }) {
     {/* Draft output */}
     {showDraft && <div style={{background:"white",border:"1px solid var(--border)",padding:14,marginBottom:12}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{fontFamily:"Georgia,serif",fontSize:13}}>Campaign Draft — edit before sending</div>
+        <div style={{fontFamily:"Georgia,serif",fontSize:13}}>2. Edit & Preview — then create in Gmail</div>
         <div style={{display:"flex",gap:6}}>
           <button onClick={()=>copy(`Subject: ${subject}\n\n${draftBody}`,"draft")} style={{fontSize:9,padding:"3px 9px",border:"none",background:copied==="draft"?"var(--green)":"var(--black)",color:"white",cursor:"pointer",fontFamily:"Georgia,serif"}}>{copied==="draft"?"✓ Copied!":"📋 Copy Draft"}</button>
           <button onClick={()=>setShowDraft(false)} style={{fontSize:9,padding:"3px 9px",border:"1px solid var(--border2)",background:"white",cursor:"pointer",fontFamily:"Georgia,serif"}}>✕</button>
@@ -516,36 +625,71 @@ function BulkEmailPanel({ leads, toast }) {
         <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--gray)",marginBottom:3}}>Subject</div>
         <input value={subject} onChange={e=>setSubject(e.target.value)} style={{width:"100%",padding:"6px 8px",border:"1px solid var(--border2)",fontFamily:"Georgia,serif",fontSize:11,outline:"none",background:"var(--cream)"}}/>
       </div>
-      <div>
+      <div style={{marginBottom:10}}>
         <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--gray)",marginBottom:3}}>Body — replace [bracketed items] before sending</div>
         <textarea value={draftBody} onChange={e=>setDraftBody(e.target.value)} rows={14} style={{width:"100%",padding:"7px 8px",border:"1px solid var(--border2)",fontFamily:"Georgia,serif",fontSize:11,outline:"none",resize:"vertical",background:"#FFFEF8",lineHeight:1.7}}/>
       </div>
-      <div style={{fontSize:10,color:"var(--gray)",marginTop:4}}>{selLeads.filter(l=>l.email).length} recipients selected · Copy this draft into Gmail, Mailchimp, or your email tool</div>
+
+      {/* Live preview */}
+      <div style={{background:"var(--cream2)",border:"1px solid var(--border)",padding:"10px 12px",marginBottom:10}}>
+        <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:1,color:"var(--gray)",marginBottom:6}}>Preview — as {selLeads[0]?.name?.split(" ")[0]||"[First Name]"} will see it</div>
+        <div style={{fontSize:11,fontWeight:"bold",marginBottom:6}}>{subject.replace("[First Name]", selLeads[0]?.name?.split(" ")[0]||"[First Name]")}</div>
+        <div style={{fontSize:11,lineHeight:1.7,whiteSpace:"pre-line",color:"var(--black2)"}}>{draftBody.replace(/\[First Name\]/g, selLeads[0]?.name?.split(" ")[0]||"[First Name]")}</div>
+      </div>
+
+      <div style={{fontSize:10,color:"var(--gray)",marginBottom:10}}>{selLeads.filter(l=>l.email).length} recipients ready · Copy this into Gmail (one draft per lead, or one BCC blast), personalize [First Name] per recipient, then send from Gmail yourself.</div>
+
+      <div style={{paddingTop:10,borderTop:"1px solid var(--border)"}}>
+        <div style={{fontSize:9,letterSpacing:1,textTransform:"uppercase",color:"var(--gray)",marginBottom:6}}>3. After you've sent it from Gmail</div>
+        <button onClick={()=>setShowConfirm(true)} disabled={selLeads.length===0} style={{padding:"6px 14px",fontSize:11,border:"none",background:selLeads.length?"var(--green)":"var(--gray)",color:"white",cursor:selLeads.length?"pointer":"default",fontFamily:"Georgia,serif"}}>
+          ✓ I sent this — log it for {selLeads.length} lead{selLeads.length!==1?"s":""}
+        </button>
+        <div style={{fontSize:9,color:"var(--gray)",marginTop:5}}>This does NOT send anything. It only logs the activity to each lead's timeline and updates Last Contacted / Last Email Sent — after you confirm you already sent it.</div>
+      </div>
+    </div>}
+
+    {/* Confirm modal */}
+    {showConfirm && <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1200,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&!confirming&&setShowConfirm(false)}>
+      <div style={{background:"white",padding:24,maxWidth:420,width:"90%"}}>
+        <div style={{fontFamily:"Georgia,serif",fontSize:15,marginBottom:10}}>Confirm Email Sent</div>
+        <div style={{fontSize:11,color:"var(--black2)",lineHeight:1.7,marginBottom:14}}>
+          This will log <strong>"{subject||draftType}"</strong> as sent to <strong>{selLeads.length}</strong> lead{selLeads.length!==1?"s":""}, add a timeline entry to each, and update their Last Contacted / Last Email Sent date to today.
+          <br/><br/>
+          Only confirm if you've already sent the email from Gmail.
+        </div>
+        <div style={{display:"flex",gap:7}}>
+          <button onClick={confirmSend} disabled={confirming} style={{flex:1,padding:"7px 14px",fontSize:11,border:"none",background:confirming?"var(--gray)":"var(--green)",color:"white",cursor:confirming?"default":"pointer",fontFamily:"Georgia,serif"}}>
+            {confirming?`Logging... ${confirmProgress||""}`:"Yes, I sent it — log now"}
+          </button>
+          {!confirming&&<button onClick={()=>setShowConfirm(false)} style={{padding:"7px 14px",fontSize:11,border:"1px solid var(--border2)",background:"white",cursor:"pointer",fontFamily:"Georgia,serif"}}>Cancel</button>}
+        </div>
+      </div>
     </div>}
 
     {/* Lead table */}
     <div style={{fontSize:11,color:"var(--gray)",marginBottom:6,display:"flex",alignItems:"center",gap:8}}>
-      {filtered.length} leads
-      {filtered.length>0&&<button onClick={toggleAll} style={{fontSize:9,padding:"2px 7px",border:"1px solid var(--border2)",background:"white",cursor:"pointer",fontFamily:"Georgia,serif"}}>{allSel?`Deselect All`:`Select All (${filtered.length})`}</button>}
+      {filtered.length} leads match filters
+      {filtered.length>0&&<button onClick={toggleAll} style={{fontSize:9,padding:"2px 7px",border:"1px solid var(--border2)",background:"white",cursor:"pointer",fontFamily:"Georgia,serif"}}>{allSel?`Deselect All`:`Select All Shown (${filtered.length})`}</button>}
     </div>
     <div style={{overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-        <thead><tr>{["","Name","Email","Stage","Tags"].map(h=><th key={h} style={{textAlign:"left",padding:"6px 7px",borderBottom:"1px solid var(--border)",color:"var(--gray)",fontSize:10,fontFamily:"Georgia,serif",fontWeight:"normal"}}>{h}</th>)}</tr></thead>
+        <thead><tr>{["","Name","Email","Stage","Temp","City","Last Email Sent"].map(h=><th key={h} style={{textAlign:"left",padding:"6px 7px",borderBottom:"1px solid var(--border)",color:"var(--gray)",fontSize:10,fontFamily:"Georgia,serif",fontWeight:"normal"}}>{h}</th>)}</tr></thead>
         <tbody>
           {filtered.slice(0,150).map(lead=><tr key={lead.id} style={{background:selected.has(lead.id)?"var(--cream)":"white"}}>
             <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border)",width:30}}><input type="checkbox" checked={selected.has(lead.id)} onChange={()=>setSelected(prev=>{const n=new Set(prev);n.has(lead.id)?n.delete(lead.id):n.add(lead.id);return n;})} style={{cursor:"pointer"}}/></td>
             <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border)",fontWeight:"bold"}}>{lead.name}</td>
             <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border)",fontSize:10,color:lead.email?"var(--black)":"var(--gray)",fontStyle:lead.email?"normal":"italic"}}>{lead.email||"No email"}</td>
             <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border)",fontSize:9,color:"var(--gray)"}}>{lead.stage}</td>
-            <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border)",fontSize:9,color:"var(--gray)"}}>{(lead.tags||"").split(",").slice(0,2).join(", ")||"—"}</td>
+            <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border)",fontSize:9,color:"var(--gray)"}}>{tempOf(lead)}</td>
+            <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border)",fontSize:9,color:"var(--gray)"}}>{lead.city||"—"}</td>
+            <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border)",fontSize:9,color:"var(--gray)"}}>{lead.last_email_sent||"—"}</td>
           </tr>)}
-          {filtered.length>150&&<tr><td colSpan={5} style={{padding:"8px 7px",fontSize:10,color:"var(--gray)",fontStyle:"italic"}}>Showing first 150 — narrow your filter.</td></tr>}
+          {filtered.length>150&&<tr><td colSpan={7} style={{padding:"8px 7px",fontSize:10,color:"var(--gray)",fontStyle:"italic"}}>Showing first 150 — narrow your filter.</td></tr>}
         </tbody>
       </table>
     </div>
   </div>;
 }
-
 // ─── Executive tab ────────────────────────────────────────────────────────────
 function leadSignals(lead) {
   const notes=(lead.notes||"").toLowerCase(), src=lead.source||"", stage=lead.stage||"";
@@ -1170,7 +1314,7 @@ export default function App() {
         {tab==="revived"&&<RevivedTab revived={revived} openLead={openLead}/>}
         {tab==="isa"&&<ISATab leads={leads} openLead={openLead}/>}
         {tab==="bulktag"&&<BulkTagPanel leads={leads} toast={showToast} onBatchSave={saveLead} onLeadsUpdated={setLeads}/>}
-        {tab==="bulkemail"&&<BulkEmailPanel leads={leads} toast={showToast}/>}
+        {tab==="bulkemail"&&<BulkEmailPanel leads={leads} toast={showToast} user={user} onSendConfirmed={(updatedLeads)=>{setLeads(ls=>ls.map(l=>{const u=updatedLeads.find(x=>x.id===l.id);return u?{...l,last_email_sent:u.last_email_sent,lcd:u.lcd}:l;}));}}/>}
         {tab==="archive"&&<ArchiveTab arch={archived} restoreLead={restoreLead}/>}
       </div>
 
